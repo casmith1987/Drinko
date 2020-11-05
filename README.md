@@ -2,4 +2,4 @@
 Drink-o
 
 
-Just a fun little plinko style drinking game I threw together this morning using matter.js.  
+Just a fun little plinko style drinking game I threw together using matter.js.  
