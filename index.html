@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset=UTF-8/>
+    <link rel="stylesheet" type="text/css" href="styles.css"/>
+  </head>
+  <body>
+    <div id='title'>
+      <h1>Drink-O!</h1>
+    </div>
+    <div id='game'>
+    <script src='./node_modules/matter-js/build/matter.js'></script>
+    <script>
+      let engine = Matter.Engine.create();
+      engine.world.gravity.y = .7;
+      let render = Matter.Render.create({
+        element: document.querySelector('#game'),
+        engine: engine,
+        options: {
+          width: 1100,
+          height:800,
+          wireframes: false,
+          background: 'transparent',
+        }
+      });
+      let ground = Matter.Bodies.rectangle(800, 800, 1600,40,{isStatic: true})
+
+      let leftWall = Matter.Bodies.rectangle(0,400,40,800,{isStatic:true})
+
+      let rightWall = Matter.Bodies.rectangle(1090, 400, 30, 830, {isStatic:true})
+
+      let topWall = Matter.Bodies.rectangle(550, 0, 1100, 40, {isStatic:true})
+
+      let mouse = Matter.Mouse.create(render.canvas);
+      let mouseConstraint = Matter.MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: {
+          render: {visible: false}
+        }
+      })
+      render.mouse = mouse;
+
+      let ball = Matter.Bodies.circle(550,550,11, {restitution:.01});
+      let sling = Matter.Constraint.create({
+        pointA: {x:550, y:550},
+        bodyB: ball,
+        stiffness: .25
+      })
+
+      let firing = false;
+
+      Matter.Events.on(mouseConstraint, 'enddrag', function(e){
+        if(e.body === ball) firing = true;
+      })
+
+      let chuteLeft = Matter.Bodies.rectangle(500, 500, 20, 600, {isStatic:true})
+
+      let chuteRight = Matter.Bodies.rectangle(600, 500, 20, 600, {isStatic: true})
+
+      let splitter = Matter.Bodies.polygon(550, 30,3,100,{isStatic:true, angle: .5})
+
+      let possibleLeft = [];
+      let possibleRight = [];
+
+      const RenderPlinks = (start,height, number) => {
+      for (let i = 0; i < number; i++) {
+        let plink = Matter.Bodies.circle(start+50*i, height, 5, {restitution: 0.01, isStatic:true});
+        if (start < 100 && i > 0 && i < number - 1) {
+          possibleLeft.push([start+50*i, height])
+        } else if (start > 550 && i > 0 && i < number - 1) {
+          possibleRight.push([start+50*i, height])
+        }
+        Matter.World.add(engine.world, plink)
+      }}
+
+      for (let i = 0; i < 11; i++) {
+        if (i%2 === 0) RenderPlinks(29,250+i*50,10)
+        else RenderPlinks(54,250+i*50,9)
+      }
+
+      for (let i=0; i< 11; i++) {
+        if (i%2 === 0) RenderPlinks(617, 250+i*50,10);
+        else RenderPlinks(642,250+i*50,9)
+      }
+
+      const renderPenalty = (x,y,color)=>{
+        let bumper = Matter.Bodies.polygon(x, y, 200, 5, {isStatic:true, render: {
+        fillStyle: color,
+        strokeStyle: 'black',
+        lineWidth: 4}})
+      Matter.World.add(engine.world,bumper)}
+
+      let currentPenalties = []
+
+      const assignPenalties = (color) => {
+        let randomLeft = possibleLeft[Math.floor(Math.random()*possibleLeft.length)];
+        while (currentPenalties.includes(randomLeft.join(''))) {
+          randomLeft = possibleLeft[Math.floor(Math.random()*possibleLeft.length)];
+        }
+        currentPenalties.push(randomLeft.join(''))
+        let randomRight = possibleRight[Math.floor(Math.random()*possibleRight.length)];
+        while (currentPenalties.includes(randomRight.join(''))) {
+          randomRight = possibleRight[Math.floor(Math.random()*possibleRight.length)];
+        }
+        currentPenalties.push(randomRight.join(''))
+        renderPenalty(randomLeft[0], randomLeft[1], color);
+        renderPenalty(randomRight[0], randomRight[1], color);
+      }
+
+      assignPenalties('pink');
+      assignPenalties('blue');
+      assignPenalties('lightgreen');
+      assignPenalties('red');
+      assignPenalties('yellow');
+      assignPenalties('cyan');
+      assignPenalties('orange');
+      assignPenalties('violet');
+
+      Matter.Events.on(engine, 'afterUpdate', function(){
+        if (firing && Math.abs(ball.position.x-550)<20 && Math.abs(ball.position.y-550)<20) {
+          penaltiesLeft = [];
+          penaltiesRight = [];
+          ball = Matter.Bodies.circle(550,550,11,{restitution:1})
+          Matter.World.add(engine.world, ball)
+          sling.bodyB = ball;
+          firing = false;
+        }
+      })
+
+      let penaltiesLeft = [];
+      let penaltiesRight = [];
+      let penaltyCountLeft = 0;
+      let penaltyCountRight = 0;
+      const penaltiesKey = {
+        'pink': 'Take a drink!',
+        'blue': 'Take a shot!',
+        'lightgreen': 'Five drinks!',
+        'red': 'Drink for 5 seconds!',
+        'yellow': 'Finish your drink!',
+        'cyan': 'You can only drink left handed now!',
+        'orange': 'One penalty this round or next is x2!',
+        'violet': 'Recite alphabet backwards or take a shot of Malort!',
+        'lose': 'You Lose!<br/> Buy The Next Round!'
+      }
+
+      Matter.Events.on(engine, 'collisionStart', function(event) {
+        for (let i of Object.keys(event.source.broadphase.pairs)) {
+          let first = event.source.broadphase.pairs[i][0]
+          let second = event.source.broadphase.pairs[i][1]
+          if (second.label === 'Polygon Body' && second.area < 300) {
+            if (second.position.x < 500) {
+              penaltiesRight.push(penaltiesKey[second.render.fillStyle])
+              penaltyCountRight++
+            } else if (second.position.x > 500) {
+              penaltiesLeft.push(penaltiesKey[second.render.fillStyle])
+              penaltyCountLeft++
+            }
+            Matter.Body.scale(second, 5,5);
+            document.getElementById('penaltiesRight').innerHTML = penaltiesRight.map(x=>`• ${x}<br/>`).join('') + (penaltyCountRight === 8 ? `<h1 style='text-align:center;color:black'>${penaltiesKey['lose']}</h1>` : '');
+            document.getElementById('penaltiesLeft').innerHTML = penaltiesLeft.map(x=>`• ${x}<br/>`).join('') + (penaltyCountLeft === 8 ? `<h1 style='text-align:center;color:black'>${penaltiesKey['lose']}</h1>` : '')
+          }
+        }
+      });
+
+      Matter.World.add(engine.world,[splitter,chuteRight, chuteLeft, topWall, rightWall, leftWall,ball, sling,ground,mouseConstraint])
+      Matter.Engine.run(engine);
+      Matter.Render.run(render);
+
+    </script>
+
+    <div id='penaltyBox'>
+      <div id='left'>
+        <h2>Team 1<br/>Penalties!</h2>
+        <div id='penaltiesLeft'>
+        </div>
+      </div>
+      <div id='spacer'></div>
+      <div id='right'>
+        <h2>Team 2<br/>Penalties!</h2>
+        <div id='penaltiesRight'>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <div id='penaltyKey' style="text-align:center;padding:5px;color:white">
+      <div><h3 style="margin:0;padding:5">Penalty Key:</h3></div>
+      <div style="display:flex;clear:none">
+        <h4 style="color: pink">Take a Drink!</h4>
+        <h4 style='color:blue'>Take a Shot!</h4>
+        <h4 style='color:lightgreen'>Five Drinks!</h4>
+        <h4 style='color: red'>Drink for 5 seconds!</h4>
+        <h4 style='color:yellow'>Finish your drink!</h4>
+        <h4 style='color:cyan'>You can only drink left handed now!</h4>
+        <h4 style='color:orange'>One penalty this round or next is x2!</h4>
+        <h4 style='color:violet'>Recite alphabet backwards or take a shot of Malort!</h4>
+      </div>
+    </div>
+  </body>
+</html>
